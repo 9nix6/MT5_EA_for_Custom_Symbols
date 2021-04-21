@@ -1,6 +1,8 @@
 # MT5 EA for Custom Symbols
 Files for the video explainig the process of modifying a standard EA for trading on MT5 custom symbols.
 
+(http://img.youtube.com/vi/6enDiP_6v-4/0.jpg)](https://youtu.be/6enDiP_6v-4)
+
 ## MQL5/Experts/Examples/Moving Average 
 This folder contains the origianal source code fro the Moving Average exert advisor shipped with MT5 at the moement of making the video.
 
