@@ -107,9 +107,9 @@ jobs:
 
       # MetaEditor resolves <...> against the data folder's MQL5\Include, so the
       # repo's headers have to sit alongside the platform ones. The EAs are
-      # staged under their own folder rather than at the repo's own paths:
-      # a stock terminal already ships MQL5\Experts\Examples\Moving Average,
-      # and compiling there would build MetaQuotes' current file, not ours.
+      # staged under their own folder rather than at the repo's own paths,
+      # so they never mix with the MQL5\Experts\Examples tree a stock
+      # terminal ships.
       - name: Compile
         run: |
           $ErrorActionPreference = "Stop"

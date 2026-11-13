@@ -8,7 +8,7 @@ product.** Nothing here is shipped by an installer and nothing here is shared wi
 
 | Path | What it is |
 |---|---|
-| `MQL5/Experts/Examples/Moving Average/Moving Average.mq5` | MetaQuotes' stock EA, the "before". **Keep it verbatim** — the video diffs against it. |
+| `MQL5/Experts/Examples/Custom Symbols/Moving Average.mq5` | MetaQuotes' stock EA, the "before". **Keep it verbatim** — the video diffs against it. |
 | `MQL5/Experts/Examples/Custom Symbols/Moving Average Mod.mq5` | the "after": signals from the custom symbol, orders to the tradable symbol |
 | `MQL5/Experts/Examples/Custom Symbols/Moving Average Trade Tracker.mq5` | "after" + Trade Tracker library calls |
 | `MQL5/Include/CodeSnippet.mqh` | `GetTradableSymbol()`, `IsCustomSymbolDataSeriesReady()` |
@@ -22,7 +22,7 @@ product.** Nothing here is shipped by an installer and nothing here is shared wi
 - **Layout differs from the SDK repos**: sources sit under a top-level `MQL5/` folder, so
   `tools/check_includes.py` resolves `<...>` against `MQL5/Include/`.
 - **CI stages the EAs under `MQL5\Experts\_CustomSymbolsRepo\`** in the runner's terminal, not at
-  their own paths, because a stock terminal already ships `Experts\Examples\Moving Average`.
+  their own paths, so they never mix with the `Experts\Examples` tree a stock terminal ships.
 - Sources are UTF-8 with a BOM, sources only (no `.ex5`), warnings fail the build — same rules as
   `9nix6/Median-and-Turbo-Renko-indicator-bundle`, whose `tools/` and workflow these are cut from.
 - Default branch is `main` (the SDK repos use `master`).
