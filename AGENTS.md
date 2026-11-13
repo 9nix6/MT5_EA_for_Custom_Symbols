@@ -9,7 +9,6 @@ product.** Nothing here is shipped by an installer and nothing here is shared wi
 | Path | What it is |
 |---|---|
 | `MQL5/Experts/Examples/Moving Average/Moving Average.mq5` | MetaQuotes' stock EA, the "before". **Keep it verbatim** — the video diffs against it. |
-| `MQL5/Experts/Examples/Custom Symbols/Moving Average.mq5` | the same original again, as the working copy's starting point |
 | `MQL5/Experts/Examples/Custom Symbols/Moving Average Mod.mq5` | the "after": signals from the custom symbol, orders to the tradable symbol |
 | `MQL5/Experts/Examples/Custom Symbols/Moving Average Trade Tracker.mq5` | "after" + Trade Tracker library calls |
 | `MQL5/Include/CodeSnippet.mqh` | `GetTradableSymbol()`, `IsCustomSymbolDataSeriesReady()` |

@@ -45,7 +45,6 @@ The repository holds sources only — no compiled `.ex5` files are committed.
 
 | File | Contents |
 |---|---|
-| `Moving Average.mq5` | The original EA source, unchanged. |
 | `Moving Average Mod.mq5` | The EA as modified in the first part of the video: signals from the custom symbol, orders to the tradable one. |
 | `Moving Average Trade Tracker.mq5` | The same EA with calls to the Trade Tracker library added, so positions are also drawn on the custom-symbol chart. |
 
