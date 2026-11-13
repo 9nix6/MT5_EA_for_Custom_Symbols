@@ -117,7 +117,6 @@ jobs:
           $metaEditor = Join-Path $mt5Dir "metaeditor64.exe"
           $mql5    = Join-Path $mt5Dir "MQL5"
           $stage   = Join-Path $mql5 "Experts\_CustomSymbolsRepo"
-          $out     = Join-Path $PWD "compiled"
 
           if (Test-Path $stage) { Remove-Item $stage -Recurse -Force }
           New-Item -ItemType Directory -Path $stage -Force | Out-Null
@@ -165,9 +164,9 @@ jobs:
             if ($errors -gt 0 -or $warnings -gt 0) { $failed = 1 }
           }
 
-          New-Item -ItemType Directory -Path $out -Force | Out-Null
-          Get-ChildItem -Path $stage -Filter *.ex5 -Recurse | Copy-Item -Destination $out -Force
-          $built = (Get-ChildItem -Path $out -Filter *.ex5).Count
+          # Counted where they were built: two of the EAs share a file name, so
+          # collecting them into one folder would overwrite one with the other.
+          $built = (Get-ChildItem -Path $stage -Filter *.ex5 -Recurse).Count
           Write-Host "Produced $built binary file(s) for $expected source(s)."
 
           if ($failed -ne 0) {
