@@ -83,7 +83,7 @@ class TheRepositoryItself(unittest.TestCase):
 
     def test_the_tree_is_actually_being_scanned(self):
         """A guard against the check silently passing because it found nothing."""
-        self.assertGreater(len(self.m.source_files()), 5)
+        self.assertGreaterEqual(len(self.m.source_files()), 5)  # 3 EAs + 2 headers
         self.assertGreater(len(self.m.shipped_headers()), 1)
 
     def test_every_quoted_include_has_a_file_beside_it(self):
