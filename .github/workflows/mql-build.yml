@@ -1,0 +1,187 @@
+name: MQL Build
+
+# Same pipeline as https://github.com/9nix6/Median-and-Turbo-Renko-indicator-bundle
+# (.github/workflows/mql-build.yml), cut down to what this repository needs:
+#   scan     -- secret leaks + include paths + encoding   (hosted, seconds)
+#   compile  -- every EA under MQL5/Experts through MetaEditor
+#               (self-hosted Windows VM -- MetaEditor is Windows-only)
+# There is no release stage: these are the companion files to a video, read
+# and compiled by the viewer, not a packaged product.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  # ===========================================================================
+  # Stage 1 -- gates that need no platform, so they always run
+  # ===========================================================================
+  scan:
+    name: Scan
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0 # gitleaks scans history, not just the tip
+
+      - name: Secret scan (gitleaks)
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      # Resolves every #include <...> without a compiler. It reads UTF-16LE
+      # sources, which plain grep cannot -- see tools/check_includes.py.
+      - name: Every #include resolves
+        run: python3 tools/check_includes.py
+
+      - name: Tool tests
+        run: python3 -m unittest discover -s tools/tests -t .
+
+  # ===========================================================================
+  # Stage 2 -- the real compile, on the self-hosted Windows VM
+  # ===========================================================================
+  compile:
+    name: Compile (MetaEditor)
+    needs: scan
+    runs-on: [self-hosted, Windows, mql]
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Ensure MetaTrader 5 is installed
+        run: |
+          $ErrorActionPreference = "Stop"
+          $mt5Dir = Join-Path $PWD "mt5"
+          $metaEditor = Join-Path $mt5Dir "metaeditor64.exe"
+
+          if (Test-Path $metaEditor) {
+            Write-Host "MetaEditor already present: $metaEditor"
+          } else {
+            $url = "${{ vars.MT5_INSTALLER_URL }}"
+            if (-not $url) { $url = "https://download.mql5.com/cdn/web/metaquotes.software.corp/mt5/mt5setup.exe" }
+            Write-Host "Downloading MT5 installer from $url"
+            Invoke-WebRequest -Uri $url -OutFile "mt5setup.exe"
+
+            Write-Host "Installing to $mt5Dir"
+            $p = Start-Process -FilePath "mt5setup.exe" -ArgumentList "/auto", "/path:$mt5Dir" -PassThru -NoNewWindow
+            $p | Wait-Process -Timeout 300 -ErrorAction SilentlyContinue
+            Start-Sleep -Seconds 20
+            Remove-Item "mt5setup.exe" -Force -ErrorAction SilentlyContinue
+
+            if (-not (Test-Path $metaEditor)) {
+              throw "MetaEditor not found at $metaEditor after installation"
+            }
+          }
+
+          # Running the terminal once materialises the standard MQL5 includes
+          # (Trade/) this repo depends on.
+          $stdInclude = Join-Path $mt5Dir "MQL5\Include\Trade\Trade.mqh"
+          if (-not (Test-Path $stdInclude)) {
+            Write-Host "Initialising platform files..."
+            $terminal = Join-Path $mt5Dir "terminal64.exe"
+            $p = Start-Process -FilePath $terminal -ArgumentList "/portable" -PassThru -NoNewWindow
+            Start-Sleep -Seconds 45
+            if (-not $p.HasExited) { $p | Stop-Process -Force -ErrorAction SilentlyContinue }
+          }
+
+          if (Test-Path $stdInclude) {
+            Write-Host "Standard includes present."
+          } else {
+            throw "Standard MQL5 includes missing -- platform initialisation failed, so <Trade/Trade.mqh> and friends will not resolve."
+          }
+
+      # MetaEditor resolves <...> against the data folder's MQL5\Include, so the
+      # repo's headers have to sit alongside the platform ones. The EAs are
+      # staged under their own folder rather than at the repo's own paths:
+      # a stock terminal already ships MQL5\Experts\Examples\Moving Average,
+      # and compiling there would build MetaQuotes' current file, not ours.
+      - name: Compile
+        run: |
+          $ErrorActionPreference = "Stop"
+          $mt5Dir  = Join-Path $PWD "mt5"
+          $metaEditor = Join-Path $mt5Dir "metaeditor64.exe"
+          $mql5    = Join-Path $mt5Dir "MQL5"
+          $stage   = Join-Path $mql5 "Experts\_CustomSymbolsRepo"
+          $out     = Join-Path $PWD "compiled"
+
+          if (Test-Path $stage) { Remove-Item $stage -Recurse -Force }
+          New-Item -ItemType Directory -Path $stage -Force | Out-Null
+          Copy-Item -Path "MQL5\Include\*" -Destination (Join-Path $mql5 "Include") -Recurse -Force
+          Copy-Item -Path "MQL5\Experts\*" -Destination $stage -Recurse -Force
+          Get-ChildItem -Path $stage -Recurse -Include *.ex5, *.ex4 -ErrorAction SilentlyContinue | Remove-Item -Force
+
+          $expected = (Get-ChildItem -Path "MQL5\Experts" -Recurse -Include *.mq5).Count
+          $staged = (Get-ChildItem -Path $stage -Recurse -Include *.mq5).Count
+          Write-Host "Staged $staged of $expected source file(s)."
+          if ($staged -ne $expected -or $expected -eq 0) {
+            throw "Staging is incomplete: $staged staged, $expected in the repository."
+          }
+
+          $failed = 0
+          $n = 0
+          foreach ($dir in (Get-ChildItem -Path $stage -Recurse -Directory | Where-Object { Get-ChildItem $_.FullName -Filter *.mq5 })) {
+            $n++
+            $log = Join-Path $PWD "compile-$n.log"
+            Write-Host "::group::$($dir.FullName)"
+            $p = Start-Process -FilePath $metaEditor `
+              -ArgumentList "/compile:`"$($dir.FullName)`"", "/inc:`"$mql5`"", "/log:`"$log`"" `
+              -PassThru -NoNewWindow -Wait
+            $code = $p.ExitCode
+            if (Test-Path $log) {
+              $text = Get-Content $log -Encoding Unicode -Raw
+              if (-not $text) { $text = Get-Content $log -Raw }
+              Write-Host $text
+              $errors = ([regex]::Matches($text, "(?m):\s*error\s")).Count
+              $warnings = ([regex]::Matches($text, "(?m):\s*warning\s")).Count
+              $summary = [regex]::Match($text, "result\s+(\d+)\s+errors?,\s+(\d+)\s+warnings?")
+              if ($summary.Success) {
+                $errors = [Math]::Max($errors, [int]$summary.Groups[1].Value)
+                $warnings = [Math]::Max($warnings, [int]$summary.Groups[2].Value)
+              }
+            } else {
+              Write-Host "No log produced by MetaEditor."
+              $errors = 1
+              $warnings = 0
+            }
+            Write-Host "::endgroup::"
+            # MetaEditor's exit code is the number of files it compiled, not an
+            # error count. Warnings fail the build too.
+            Write-Host "$($dir.Name) -- $code file(s) compiled, $errors error(s), $warnings warning(s)"
+            if ($errors -gt 0 -or $warnings -gt 0) { $failed = 1 }
+          }
+
+          New-Item -ItemType Directory -Path $out -Force | Out-Null
+          Get-ChildItem -Path $stage -Filter *.ex5 -Recurse | Copy-Item -Destination $out -Force
+          $built = (Get-ChildItem -Path $out -Filter *.ex5).Count
+          Write-Host "Produced $built binary file(s) for $expected source(s)."
+
+          if ($failed -ne 0) {
+            Write-Error "Compilation reported errors or warnings -- see the logs above."
+            exit 1
+          }
+          if ($built -ne $expected) {
+            throw "$built binaries for $expected sources."
+          }
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: compile-logs
+          path: compile-*.log
+          if-no-files-found: ignore
+          retention-days: 1
